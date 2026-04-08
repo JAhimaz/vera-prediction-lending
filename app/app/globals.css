@@ -1,0 +1,8 @@
+@import "tailwindcss";
+@import "./theme.css";
+@import "./wallet-overrides.css";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
