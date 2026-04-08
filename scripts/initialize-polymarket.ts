@@ -76,6 +76,7 @@ async function main() {
   const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
   const program = new Program(idlJson as Idl, provider);
 
+  const TREASURY = new PublicKey("7M5GcaAkEbdzCurMBsZZAytvHABCPKW6L4URsfdTSHwT");
   const results: any[] = [];
   const userWallet = process.argv[2] ? new PublicKey(process.argv[2]) : null;
 
@@ -89,9 +90,9 @@ async function main() {
     const [pool] = findPoolPda(usdcMint);
     const [vault] = findVaultPda(pool);
 
-    // Init pool
-    await program.methods.initializePool(500, 500, 5000, 6500).accounts({
-      authority: admin.publicKey, usdcMint, pool, vault,
+    // Init pool with fees: 0.1% deposit, 0.5% borrow, 5% liquidation
+    await program.methods.initializePool(500, 500, 5000, 6500, 10, 50, 500).accounts({
+      authority: admin.publicKey, usdcMint, treasury: TREASURY, pool, vault,
       tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
     }).signers([admin]).rpc();
 
@@ -102,6 +103,10 @@ async function main() {
       systemProgram: SystemProgram.programId,
     }).signers([admin]).rpc();
 
+    // Create treasury USDC ATA for fees
+    const { getOrCreateAssociatedTokenAccount } = await import("@solana/spl-token");
+    const treasuryUsdc = await getOrCreateAssociatedTokenAccount(connection, admin, usdcMint, TREASURY);
+
     // Seed liquidity based on volume (scaled down)
     const seedAmount = Math.max(1000, Math.min(10000, Math.round(pm.volume24hr / 10000)));
     const adminUsdc = await createAccount(connection, admin, usdcMint, admin.publicKey);
@@ -109,8 +114,8 @@ async function main() {
     const [lenderPos] = findLenderPositionPda(pool, admin.publicKey);
     await program.methods.deposit(new BN(seedAmount * 1_000_000)).accounts({
       lender: admin.publicKey, pool, lenderPosition: lenderPos, usdcMint,
-      lenderUsdc: adminUsdc, vault, tokenProgram: TOKEN_PROGRAM_ID,
-      systemProgram: SystemProgram.programId,
+      lenderUsdc: adminUsdc, vault, treasuryUsdc: treasuryUsdc.address,
+      tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
     }).signers([admin]).rpc();
 
     // Mint prediction tokens to admin

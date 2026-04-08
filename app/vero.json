@@ -173,6 +173,13 @@
           }
         },
         {
+          "name": "treasury_usdc",
+          "docs": [
+            "Treasury USDC token account that receives protocol fees"
+          ],
+          "writable": true
+        },
+        {
           "name": "token_program"
         },
         {
@@ -295,6 +302,13 @@
           }
         },
         {
+          "name": "treasury_usdc",
+          "docs": [
+            "Treasury USDC token account that receives protocol fees"
+          ],
+          "writable": true
+        },
+        {
           "name": "token_program"
         },
         {
@@ -397,6 +411,9 @@
           "name": "usdc_mint"
         },
         {
+          "name": "treasury"
+        },
+        {
           "name": "pool",
           "writable": true,
           "pda": {
@@ -462,6 +479,18 @@
         },
         {
           "name": "liquidation_threshold_bps",
+          "type": "u16"
+        },
+        {
+          "name": "deposit_fee_bps",
+          "type": "u16"
+        },
+        {
+          "name": "borrow_fee_bps",
+          "type": "u16"
+        },
+        {
+          "name": "liquidation_fee_bps",
           "type": "u16"
         }
       ]
@@ -636,6 +665,13 @@
               }
             ]
           }
+        },
+        {
+          "name": "treasury_usdc",
+          "docs": [
+            "Treasury USDC token account that receives protocol fees"
+          ],
+          "writable": true
         },
         {
           "name": "token_program"
@@ -1290,6 +1326,13 @@
             "type": "pubkey"
           },
           {
+            "name": "treasury",
+            "docs": [
+              "Protocol treasury wallet that receives fees"
+            ],
+            "type": "pubkey"
+          },
+          {
             "name": "total_deposits",
             "docs": [
               "Total USDC deposited by lenders"
@@ -1300,6 +1343,13 @@
             "name": "total_borrowed",
             "docs": [
               "Total USDC currently borrowed"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_fees_collected",
+            "docs": [
+              "Total fees collected by the protocol"
             ],
             "type": "u64"
           },
@@ -1328,6 +1378,27 @@
             "name": "liquidation_threshold_bps",
             "docs": [
               "Liquidation threshold in basis points (e.g., 6500 = 65%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "deposit_fee_bps",
+            "docs": [
+              "Fee on deposits in basis points (e.g., 10 = 0.1%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "borrow_fee_bps",
+            "docs": [
+              "Fee on borrows in basis points (e.g., 50 = 0.5%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "liquidation_fee_bps",
+            "docs": [
+              "Fee on liquidations in basis points (e.g., 500 = 5%)"
             ],
             "type": "u16"
           },

@@ -116,12 +116,13 @@ fn find_collateral_vault_pda(borrow_position: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[b"collateral_vault", borrow_position.as_ref()], &vero::ID)
 }
 
-fn init_pool_ix(admin: &Pubkey, usdc_mint: &Pubkey, pool: &Pubkey, vault: &Pubkey) -> Instruction {
+fn init_pool_ix(admin: &Pubkey, usdc_mint: &Pubkey, treasury: &Pubkey, pool: &Pubkey, vault: &Pubkey) -> Instruction {
     Instruction {
         program_id: vero::ID,
         accounts: vec![
             AccountMeta::new(*admin, true),
             AccountMeta::new_readonly(*usdc_mint, false),
+            AccountMeta::new_readonly(*treasury, false),
             AccountMeta::new(*pool, false),
             AccountMeta::new(*vault, false),
             AccountMeta::new_readonly(spl_token::ID, false),
@@ -132,6 +133,9 @@ fn init_pool_ix(admin: &Pubkey, usdc_mint: &Pubkey, pool: &Pubkey, vault: &Pubke
             liquidation_bonus_bps: 500,
             max_ltv_bps: 5000,
             liquidation_threshold_bps: 6500,
+            deposit_fee_bps: 0,
+            borrow_fee_bps: 0,
+            liquidation_fee_bps: 0,
         }
         .data(),
     }
@@ -144,6 +148,7 @@ fn deposit_ix(
     usdc_mint: &Pubkey,
     lender_usdc: &Pubkey,
     vault: &Pubkey,
+    treasury_usdc: &Pubkey,
     amount: u64,
 ) -> Instruction {
     Instruction {
@@ -155,6 +160,7 @@ fn deposit_ix(
             AccountMeta::new_readonly(*usdc_mint, false),
             AccountMeta::new(*lender_usdc, false),
             AccountMeta::new(*vault, false),
+            AccountMeta::new(*treasury_usdc, false),
             AccountMeta::new_readonly(spl_token::ID, false),
             AccountMeta::new_readonly(anchor_lang::solana_program::system_program::ID, false),
         ],
@@ -219,6 +225,7 @@ fn borrow_ix(
     usdc_mint: &Pubkey,
     borrower_usdc: &Pubkey,
     vault: &Pubkey,
+    treasury_usdc: &Pubkey,
     collateral_amount: u64,
     borrow_amount: u64,
 ) -> Instruction {
@@ -235,6 +242,7 @@ fn borrow_ix(
             AccountMeta::new_readonly(*usdc_mint, false),
             AccountMeta::new(*borrower_usdc, false),
             AccountMeta::new(*vault, false),
+            AccountMeta::new(*treasury_usdc, false),
             AccountMeta::new_readonly(spl_token::ID, false),
             AccountMeta::new_readonly(anchor_lang::solana_program::system_program::ID, false),
         ],
@@ -286,7 +294,7 @@ fn test_initialize_pool() {
     let (pool_pda, _) = find_pool_pda(&usdc_mint);
     let (vault_pda, _) = find_vault_pda(&pool_pda);
 
-    let ix = init_pool_ix(&admin.pubkey(), &usdc_mint, &pool_pda, &vault_pda);
+    let ix = init_pool_ix(&admin.pubkey(), &usdc_mint, &admin.pubkey(), &pool_pda, &vault_pda);
     let msg = Message::new(&[ix], Some(&admin.pubkey()));
     let tx = Transaction::new(&[&admin], msg, svm.latest_blockhash());
     svm.send_transaction(tx).unwrap();
@@ -308,8 +316,11 @@ fn test_deposit_and_withdraw() {
     let (pool_pda, _) = find_pool_pda(&usdc_mint);
     let (vault_pda, _) = find_vault_pda(&pool_pda);
 
+    // Create treasury USDC token account
+    let treasury_usdc = create_token_account(&mut svm, &admin, &usdc_mint, &admin.pubkey());
+
     // Init pool
-    let ix = init_pool_ix(&admin.pubkey(), &usdc_mint, &pool_pda, &vault_pda);
+    let ix = init_pool_ix(&admin.pubkey(), &usdc_mint, &admin.pubkey(), &pool_pda, &vault_pda);
     let msg = Message::new(&[ix], Some(&admin.pubkey()));
     svm.send_transaction(Transaction::new(&[&admin], msg, svm.latest_blockhash()))
         .unwrap();
@@ -323,7 +334,7 @@ fn test_deposit_and_withdraw() {
 
     // Deposit 500 USDC
     let ix = deposit_ix(
-        &lender.pubkey(), &pool_pda, &lender_pos, &usdc_mint, &lender_usdc, &vault_pda,
+        &lender.pubkey(), &pool_pda, &lender_pos, &usdc_mint, &lender_usdc, &vault_pda, &treasury_usdc,
         500_000_000,
     );
     let msg = Message::new(&[ix], Some(&lender.pubkey()));
@@ -356,8 +367,11 @@ fn test_borrow_and_repay() {
     let (pool_pda, _) = find_pool_pda(&usdc_mint);
     let (vault_pda, _) = find_vault_pda(&pool_pda);
 
+    // Create treasury USDC token account
+    let treasury_usdc = create_token_account(&mut svm, &admin, &usdc_mint, &admin.pubkey());
+
     // Init pool
-    let ix = init_pool_ix(&admin.pubkey(), &usdc_mint, &pool_pda, &vault_pda);
+    let ix = init_pool_ix(&admin.pubkey(), &usdc_mint, &admin.pubkey(), &pool_pda, &vault_pda);
     let msg = Message::new(&[ix], Some(&admin.pubkey()));
     svm.send_transaction(Transaction::new(&[&admin], msg, svm.latest_blockhash()))
         .unwrap();
@@ -369,7 +383,7 @@ fn test_borrow_and_repay() {
     mint_to(&mut svm, &admin, &usdc_mint, &lender_usdc, 10_000_000_000);
     let (lender_pos, _) = find_lender_pda(&pool_pda, &lender.pubkey());
     let ix = deposit_ix(
-        &lender.pubkey(), &pool_pda, &lender_pos, &usdc_mint, &lender_usdc, &vault_pda,
+        &lender.pubkey(), &pool_pda, &lender_pos, &usdc_mint, &lender_usdc, &vault_pda, &treasury_usdc,
         10_000_000_000,
     );
     let msg = Message::new(&[ix], Some(&lender.pubkey()));
@@ -397,7 +411,7 @@ fn test_borrow_and_repay() {
     let ix = borrow_ix(
         &borrower.pubkey(), &pool_pda, &prediction_mint, &oracle_pda,
         &borrow_pos, &collateral_vault, &borrower_collateral,
-        &usdc_mint, &borrower_usdc, &vault_pda,
+        &usdc_mint, &borrower_usdc, &vault_pda, &treasury_usdc,
         1_000_000_000, 300_000_000,
     );
     let msg = Message::new(&[ix], Some(&borrower.pubkey()));
@@ -436,8 +450,11 @@ fn test_borrow_exceeds_ltv_fails() {
     let (pool_pda, _) = find_pool_pda(&usdc_mint);
     let (vault_pda, _) = find_vault_pda(&pool_pda);
 
+    // Create treasury USDC token account
+    let treasury_usdc = create_token_account(&mut svm, &admin, &usdc_mint, &admin.pubkey());
+
     // Init pool
-    let ix = init_pool_ix(&admin.pubkey(), &usdc_mint, &pool_pda, &vault_pda);
+    let ix = init_pool_ix(&admin.pubkey(), &usdc_mint, &admin.pubkey(), &pool_pda, &vault_pda);
     let msg = Message::new(&[ix], Some(&admin.pubkey()));
     svm.send_transaction(Transaction::new(&[&admin], msg, svm.latest_blockhash())).unwrap();
 
@@ -448,7 +465,7 @@ fn test_borrow_exceeds_ltv_fails() {
     mint_to(&mut svm, &admin, &usdc_mint, &lender_usdc, 10_000_000_000);
     let (lender_pos, _) = find_lender_pda(&pool_pda, &lender.pubkey());
     let ix = deposit_ix(
-        &lender.pubkey(), &pool_pda, &lender_pos, &usdc_mint, &lender_usdc, &vault_pda,
+        &lender.pubkey(), &pool_pda, &lender_pos, &usdc_mint, &lender_usdc, &vault_pda, &treasury_usdc,
         10_000_000_000,
     );
     let msg = Message::new(&[ix], Some(&lender.pubkey()));
@@ -473,7 +490,7 @@ fn test_borrow_exceeds_ltv_fails() {
     let ix = borrow_ix(
         &borrower.pubkey(), &pool_pda, &prediction_mint, &oracle_pda,
         &borrow_pos, &collateral_vault, &borrower_collateral,
-        &usdc_mint, &borrower_usdc, &vault_pda,
+        &usdc_mint, &borrower_usdc, &vault_pda, &treasury_usdc,
         1_000_000_000, 400_000_000, // exceeds LTV
     );
     let msg = Message::new(&[ix], Some(&borrower.pubkey()));
@@ -518,6 +535,7 @@ fn liquidate_ix(
     liquidator_usdc: &Pubkey,
     liquidator_collateral: &Pubkey,
     vault: &Pubkey,
+    treasury_usdc: &Pubkey,
 ) -> Instruction {
     Instruction {
         program_id: vero::ID,
@@ -533,6 +551,7 @@ fn liquidate_ix(
             AccountMeta::new(*liquidator_usdc, false),
             AccountMeta::new(*liquidator_collateral, false),
             AccountMeta::new(*vault, false),
+            AccountMeta::new(*treasury_usdc, false),
             AccountMeta::new_readonly(spl_token::ID, false),
         ],
         data: vero::instruction::Liquidate {}.data(),
@@ -540,19 +559,22 @@ fn liquidate_ix(
 }
 
 /// Sets up a pool with liquidity, oracle, and a borrower with an open position.
-/// Returns (pool, vault, oracle, borrower, borrower_usdc, borrower_collateral, borrow_pos, collateral_vault)
+/// Returns (pool, vault, oracle, borrower, borrower_usdc, borrower_collateral, borrow_pos, collateral_vault, usdc_mint, prediction_mint, treasury_usdc)
 fn setup_borrow_scenario(
     svm: &mut LiteSVM,
     admin: &Keypair,
     probability_bps: u16,
-) -> (Pubkey, Pubkey, Pubkey, Keypair, Pubkey, Pubkey, Pubkey, Pubkey, Pubkey, Pubkey) {
+) -> (Pubkey, Pubkey, Pubkey, Keypair, Pubkey, Pubkey, Pubkey, Pubkey, Pubkey, Pubkey, Pubkey) {
     let usdc_mint = create_mint(svm, admin, USDC_DECIMALS);
     let prediction_mint = create_mint(svm, admin, USDC_DECIMALS);
     let (pool_pda, _) = find_pool_pda(&usdc_mint);
     let (vault_pda, _) = find_vault_pda(&pool_pda);
 
+    // Create treasury USDC token account (admin is the treasury in tests)
+    let treasury_usdc = create_token_account(svm, admin, &usdc_mint, &admin.pubkey());
+
     // Init pool
-    let ix = init_pool_ix(&admin.pubkey(), &usdc_mint, &pool_pda, &vault_pda);
+    let ix = init_pool_ix(&admin.pubkey(), &usdc_mint, &admin.pubkey(), &pool_pda, &vault_pda);
     let msg = Message::new(&[ix], Some(&admin.pubkey()));
     svm.send_transaction(Transaction::new(&[admin], msg, svm.latest_blockhash())).unwrap();
 
@@ -562,7 +584,7 @@ fn setup_borrow_scenario(
     let lender_usdc = create_token_account(svm, &lender, &usdc_mint, &lender.pubkey());
     mint_to(svm, admin, &usdc_mint, &lender_usdc, 10_000_000_000);
     let (lender_pos, _) = find_lender_pda(&pool_pda, &lender.pubkey());
-    let ix = deposit_ix(&lender.pubkey(), &pool_pda, &lender_pos, &usdc_mint, &lender_usdc, &vault_pda, 10_000_000_000);
+    let ix = deposit_ix(&lender.pubkey(), &pool_pda, &lender_pos, &usdc_mint, &lender_usdc, &vault_pda, &treasury_usdc, 10_000_000_000);
     let msg = Message::new(&[ix], Some(&lender.pubkey()));
     svm.send_transaction(Transaction::new(&[&lender], msg, svm.latest_blockhash())).unwrap();
 
@@ -586,13 +608,13 @@ fn setup_borrow_scenario(
     let ix = borrow_ix(
         &borrower.pubkey(), &pool_pda, &prediction_mint, &oracle_pda,
         &borrow_pos, &collateral_vault, &borrower_collateral,
-        &usdc_mint, &borrower_usdc, &vault_pda,
+        &usdc_mint, &borrower_usdc, &vault_pda, &treasury_usdc,
         1_000_000_000, 300_000_000,
     );
     let msg = Message::new(&[ix], Some(&borrower.pubkey()));
     svm.send_transaction(Transaction::new(&[&borrower], msg, svm.latest_blockhash())).unwrap();
 
-    (pool_pda, vault_pda, oracle_pda, borrower, borrower_usdc, borrower_collateral, borrow_pos, collateral_vault, usdc_mint, prediction_mint)
+    (pool_pda, vault_pda, oracle_pda, borrower, borrower_usdc, borrower_collateral, borrow_pos, collateral_vault, usdc_mint, prediction_mint, treasury_usdc)
 }
 
 // === New Tests ===
@@ -644,7 +666,7 @@ fn test_oracle_update_and_resolve() {
 #[test]
 fn test_liquidation_after_probability_drop() {
     let (mut svm, admin) = setup();
-    let (pool_pda, vault_pda, oracle_pda, borrower, _borrower_usdc, _borrower_collateral, borrow_pos, collateral_vault, usdc_mint, prediction_mint) =
+    let (pool_pda, vault_pda, oracle_pda, borrower, _borrower_usdc, _borrower_collateral, borrow_pos, collateral_vault, usdc_mint, prediction_mint, treasury_usdc) =
         setup_borrow_scenario(&mut svm, &admin, 7500);
 
     // Position: 1000 collateral at 75%, borrowed 300 USDC
@@ -668,7 +690,7 @@ fn test_liquidation_after_probability_drop() {
         &liquidator.pubkey(), &borrower.pubkey(), &pool_pda,
         &prediction_mint, &oracle_pda, &usdc_mint,
         &borrow_pos, &collateral_vault,
-        &liquidator_usdc, &liquidator_collateral, &vault_pda,
+        &liquidator_usdc, &liquidator_collateral, &vault_pda, &treasury_usdc,
     );
     let msg = Message::new(&[ix], Some(&liquidator.pubkey()));
     svm.send_transaction(Transaction::new(&[&liquidator], msg, svm.latest_blockhash())).unwrap();
@@ -688,7 +710,7 @@ fn test_liquidation_after_probability_drop() {
 #[test]
 fn test_liquidation_fails_when_healthy() {
     let (mut svm, admin) = setup();
-    let (pool_pda, vault_pda, oracle_pda, borrower, _borrower_usdc, _borrower_collateral, borrow_pos, collateral_vault, usdc_mint, prediction_mint) =
+    let (pool_pda, vault_pda, oracle_pda, borrower, _borrower_usdc, _borrower_collateral, borrow_pos, collateral_vault, usdc_mint, prediction_mint, treasury_usdc) =
         setup_borrow_scenario(&mut svm, &admin, 7500);
 
     // Position is healthy at 75% — liquidation should fail
@@ -702,7 +724,7 @@ fn test_liquidation_fails_when_healthy() {
         &liquidator.pubkey(), &borrower.pubkey(), &pool_pda,
         &prediction_mint, &oracle_pda, &usdc_mint,
         &borrow_pos, &collateral_vault,
-        &liquidator_usdc, &liquidator_collateral, &vault_pda,
+        &liquidator_usdc, &liquidator_collateral, &vault_pda, &treasury_usdc,
     );
     let msg = Message::new(&[ix], Some(&liquidator.pubkey()));
     let result = svm.send_transaction(Transaction::new(&[&liquidator], msg, svm.latest_blockhash()));
@@ -716,8 +738,11 @@ fn test_withdraw_exceeds_available_fails() {
     let (pool_pda, _) = find_pool_pda(&usdc_mint);
     let (vault_pda, _) = find_vault_pda(&pool_pda);
 
+    // Create treasury USDC token account
+    let treasury_usdc = create_token_account(&mut svm, &admin, &usdc_mint, &admin.pubkey());
+
     // Init pool and deposit 500
-    let ix = init_pool_ix(&admin.pubkey(), &usdc_mint, &pool_pda, &vault_pda);
+    let ix = init_pool_ix(&admin.pubkey(), &usdc_mint, &admin.pubkey(), &pool_pda, &vault_pda);
     let msg = Message::new(&[ix], Some(&admin.pubkey()));
     svm.send_transaction(Transaction::new(&[&admin], msg, svm.latest_blockhash())).unwrap();
 
@@ -727,7 +752,7 @@ fn test_withdraw_exceeds_available_fails() {
     mint_to(&mut svm, &admin, &usdc_mint, &lender_usdc, 500_000_000);
     let (lender_pos, _) = find_lender_pda(&pool_pda, &lender.pubkey());
 
-    let ix = deposit_ix(&lender.pubkey(), &pool_pda, &lender_pos, &usdc_mint, &lender_usdc, &vault_pda, 500_000_000);
+    let ix = deposit_ix(&lender.pubkey(), &pool_pda, &lender_pos, &usdc_mint, &lender_usdc, &vault_pda, &treasury_usdc, 500_000_000);
     let msg = Message::new(&[ix], Some(&lender.pubkey()));
     svm.send_transaction(Transaction::new(&[&lender], msg, svm.latest_blockhash())).unwrap();
 
@@ -741,7 +766,7 @@ fn test_withdraw_exceeds_available_fails() {
 #[test]
 fn test_partial_repay() {
     let (mut svm, admin) = setup();
-    let (pool_pda, vault_pda, _oracle_pda, borrower, borrower_usdc, borrower_collateral, borrow_pos, collateral_vault, usdc_mint, prediction_mint) =
+    let (pool_pda, vault_pda, _oracle_pda, borrower, borrower_usdc, borrower_collateral, borrow_pos, collateral_vault, usdc_mint, prediction_mint, _treasury_usdc) =
         setup_borrow_scenario(&mut svm, &admin, 7500);
 
     // Partial repay: 100 out of 300

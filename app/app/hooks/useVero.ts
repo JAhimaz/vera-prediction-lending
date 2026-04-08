@@ -13,6 +13,7 @@ import {
 import idlJson from "../../vero.json";
 
 export const PROGRAM_ID = new PublicKey(idlJson.address);
+const TREASURY = new PublicKey("7M5GcaAkEbdzCurMBsZZAytvHABCPKW6L4URsfdTSHwT");
 
 export function findPoolPda(usdcMint: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync([Buffer.from("pool"), usdcMint.toBuffer()], PROGRAM_ID);
@@ -105,11 +106,13 @@ export function useVero(usdcMint?: PublicKey, predictionMint?: PublicKey) {
     const [vault] = findVaultPda(pool);
     const [lenderPosition] = findLenderPositionPda(pool, wallet.publicKey);
     const { ata, createIx } = await getOrCreateAta(connection, wallet.publicKey, usdcMint, wallet.publicKey);
+    const { ata: treasuryUsdc, createIx: treasuryIx } = await getOrCreateAta(connection, wallet.publicKey, usdcMint, TREASURY);
+    const preIxs = [createIx, treasuryIx].filter(Boolean);
     const builder = program.methods.deposit(new BN(amount)).accounts({
       lender: wallet.publicKey, pool, lenderPosition, usdcMint, lenderUsdc: ata, vault,
-      tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
+      treasuryUsdc, tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
     });
-    if (createIx) builder.preInstructions([createIx]);
+    if (preIxs.length) builder.preInstructions(preIxs as any[]);
     const sig = await builder.rpc();
     await refreshBalances();
     return sig;
@@ -140,10 +143,11 @@ export function useVero(usdcMint?: PublicKey, predictionMint?: PublicKey) {
     const [collateralVault] = findCollateralVaultPda(borrowPosition);
     const { ata: borrowerCollateral, createIx: ix1 } = await getOrCreateAta(connection, wallet.publicKey, predictionMint, wallet.publicKey);
     const { ata: borrowerUsdc, createIx: ix2 } = await getOrCreateAta(connection, wallet.publicKey, usdcMint, wallet.publicKey);
-    const preIxs = [ix1, ix2].filter(Boolean);
+    const { ata: treasuryUsdc, createIx: ix3 } = await getOrCreateAta(connection, wallet.publicKey, usdcMint, TREASURY);
+    const preIxs = [ix1, ix2, ix3].filter(Boolean);
     const builder = program.methods.borrow(new BN(collateralAmount), new BN(borrowAmount), new BN(0)).accounts({
       borrower: wallet.publicKey, pool, collateralMint: predictionMint, oracle, borrowPosition, collateralVault,
-      borrowerCollateral, usdcMint, borrowerUsdc, vault,
+      borrowerCollateral, usdcMint, borrowerUsdc, vault, treasuryUsdc,
       tokenProgram: TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
     });
     if (preIxs.length) builder.preInstructions(preIxs as any[]);

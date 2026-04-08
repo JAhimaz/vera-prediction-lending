@@ -20,6 +20,9 @@ pub mod vero {
         liquidation_bonus_bps: u16,
         max_ltv_bps: u16,
         liquidation_threshold_bps: u16,
+        deposit_fee_bps: u16,
+        borrow_fee_bps: u16,
+        liquidation_fee_bps: u16,
     ) -> Result<()> {
         instructions::initialize_pool::handler(
             ctx,
@@ -27,6 +30,9 @@ pub mod vero {
             liquidation_bonus_bps,
             max_ltv_bps,
             liquidation_threshold_bps,
+            deposit_fee_bps,
+            borrow_fee_bps,
+            liquidation_fee_bps,
         )
     }
 

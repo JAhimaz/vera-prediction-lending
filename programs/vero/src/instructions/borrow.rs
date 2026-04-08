@@ -54,7 +54,12 @@ pub fn handler(
     let cpi_ctx = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts);
     token_interface::transfer_checked(cpi_ctx, collateral_amount, 6)?;
 
-    // Transfer USDC from pool vault to borrower
+    // Calculate borrow fee
+    let fee_bps = pool.borrow_fee_bps;
+    let fee = (borrow_amount as u128 * fee_bps as u128 / 10000) as u64;
+    let net_borrow = borrow_amount.saturating_sub(fee);
+
+    // Transfer USDC from pool vault to borrower (net of fee)
     let usdc_mint_key = pool.usdc_mint;
     let pool_seeds = &[
         b"pool".as_ref(),
@@ -74,11 +79,26 @@ pub fn handler(
         cpi_accounts,
         signer_seeds,
     );
-    token_interface::transfer_checked(cpi_ctx, borrow_amount, 6)?;
+    token_interface::transfer_checked(cpi_ctx, net_borrow, 6)?;
 
-    // Update pool
+    // Transfer fee to treasury
+    if fee > 0 {
+        let cpi_accounts = TransferChecked {
+            from: ctx.accounts.vault.to_account_info(),
+            mint: ctx.accounts.usdc_mint.to_account_info(),
+            to: ctx.accounts.treasury_usdc.to_account_info(),
+            authority: ctx.accounts.pool.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.key(), cpi_accounts, signer_seeds,
+        );
+        token_interface::transfer_checked(cpi_ctx, fee, 6)?;
+    }
+
+    // Update pool (full borrow_amount is the debt, fee comes from pool)
     let pool = &mut ctx.accounts.pool;
     pool.total_borrowed = pool.total_borrowed.checked_add(borrow_amount).unwrap();
+    pool.total_fees_collected = pool.total_fees_collected.checked_add(fee).unwrap();
 
     // Initialize borrow position
     let position = &mut ctx.accounts.borrow_position;
@@ -160,6 +180,14 @@ pub struct Borrow<'info> {
         bump = pool.vault_bump,
     )]
     pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// Treasury USDC token account that receives protocol fees
+    #[account(
+        mut,
+        constraint = treasury_usdc.owner == pool.treasury,
+        constraint = treasury_usdc.mint == pool.usdc_mint,
+    )]
+    pub treasury_usdc: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,

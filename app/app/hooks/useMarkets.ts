@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
-import { Program, AnchorProvider, Idl } from "@coral-xyz/anchor";
+import { Program, AnchorProvider, BorshCoder, Idl } from "@coral-xyz/anchor";
 import idlJson from "../../vero.json";
 import marketsConfig from "../markets.json";
 
@@ -46,45 +46,53 @@ export function useMarkets() {
 
   const discoverMarkets = useCallback(async () => {
     try {
-      const provider = new AnchorProvider(connection, {} as any, {});
-      const program = new Program(idlJson as Idl, provider);
+      const coder = new BorshCoder(idlJson as Idl);
 
-      // Only fetch the specific pools and oracles from our config
+      // Batch: collect all pool + oracle pubkeys
+      const poolKeys = marketsConfig.map((c) => new PublicKey(c.pool));
+      const oracleKeys = marketsConfig.map((c) => new PublicKey(c.oracle));
+      const allKeys = [...poolKeys, ...oracleKeys];
+
+      // Single RPC call for all accounts
+      const allAccounts = await connection.getMultipleAccountsInfo(allKeys);
+
       const discovered: Market[] = [];
 
-      for (const cfg of marketsConfig) {
-        try {
-          const poolKey = new PublicKey(cfg.pool);
-          const oracleKey = new PublicKey(cfg.oracle);
+      for (let i = 0; i < marketsConfig.length; i++) {
+        const cfg = marketsConfig[i];
+        const poolAccount = allAccounts[i];
+        const oracleAccount = allAccounts[marketsConfig.length + i];
 
-          const [poolData, oracleData] = await Promise.all([
-            (program.account as any).lendingPool.fetch(poolKey),
-            (program.account as any).probabilityOracle.fetch(oracleKey),
-          ]);
+        if (!poolAccount || !oracleAccount) continue;
+
+        try {
+          const poolData = coder.accounts.decode("lendingPool", poolAccount.data);
+          const oracleData = coder.accounts.decode("probabilityOracle", oracleAccount.data);
 
           const livePrice = cfg.slug ? livePrices.current.get(cfg.slug) : undefined;
-          const probBps = livePrice ?? oracleData.probabilityBps;
+          const probBps = livePrice ?? (oracleData as any).probabilityBps;
 
           discovered.push({
             name: cfg.name,
             slug: cfg.slug,
             polymarketUrl: cfg.polymarketUrl,
-            poolAddress: poolKey,
+            poolAddress: poolKeys[i],
             usdcMint: new PublicKey(cfg.usdcMint),
             predictionMint: new PublicKey(cfg.predictionMint),
-            oracleAddress: oracleKey,
+            oracleAddress: oracleKeys[i],
             probabilityBps: probBps,
-            totalDeposits: poolData.totalDeposits.toNumber() / 1e6,
-            totalBorrowed: poolData.totalBorrowed.toNumber() / 1e6,
-            availableLiquidity: (poolData.totalDeposits.toNumber() - poolData.totalBorrowed.toNumber()) / 1e6,
-            interestRateBps: poolData.interestRateBps,
-            maxLtvBps: poolData.maxLtvBps,
-            liquidationThresholdBps: poolData.liquidationThresholdBps,
-            resolved: oracleData.resolved,
-            outcome: oracleData.outcome,
+            totalDeposits: (poolData as any).totalDeposits.toNumber() / 1e6,
+            totalBorrowed: (poolData as any).totalBorrowed.toNumber() / 1e6,
+            availableLiquidity:
+              ((poolData as any).totalDeposits.toNumber() - (poolData as any).totalBorrowed.toNumber()) / 1e6,
+            interestRateBps: (poolData as any).interestRateBps,
+            maxLtvBps: (poolData as any).maxLtvBps,
+            liquidationThresholdBps: (poolData as any).liquidationThresholdBps,
+            resolved: (oracleData as any).resolved,
+            outcome: (oracleData as any).outcome,
           });
         } catch {
-          // Skip markets that can't be fetched
+          // Skip markets that fail to decode (old format)
         }
       }
 

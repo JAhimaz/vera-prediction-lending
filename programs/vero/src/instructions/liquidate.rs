@@ -52,7 +52,12 @@ pub fn handler(ctx: Context<Liquidate>) -> Result<()> {
     let debt = position.total_debt();
     let collateral_amount = position.collateral_amount;
 
-    // Liquidator repays the full debt
+    // Calculate liquidation fee
+    let fee_bps = pool.liquidation_fee_bps;
+    let fee = (debt as u128 * fee_bps as u128 / 10000) as u64;
+    let total_payment = debt.saturating_add(fee);
+
+    // Liquidator repays the full debt + fee
     let cpi_accounts = TransferChecked {
         from: ctx.accounts.liquidator_usdc.to_account_info(),
         mint: ctx.accounts.usdc_mint.to_account_info(),
@@ -60,7 +65,7 @@ pub fn handler(ctx: Context<Liquidate>) -> Result<()> {
         authority: ctx.accounts.liquidator.to_account_info(),
     };
     let cpi_ctx = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts);
-    token_interface::transfer_checked(cpi_ctx, debt, 6)?;
+    token_interface::transfer_checked(cpi_ctx, total_payment, 6)?;
 
     // Liquidator receives all collateral (at a discount — that's the incentive)
     let usdc_mint_key = pool.usdc_mint;
@@ -97,10 +102,25 @@ pub fn handler(ctx: Context<Liquidate>) -> Result<()> {
     );
     token_interface::close_account(cpi_ctx)?;
 
-    // Update pool — only subtract the principal portion from total_borrowed
+    // Transfer fee from vault to treasury
+    if fee > 0 {
+        let cpi_accounts = TransferChecked {
+            from: ctx.accounts.vault.to_account_info(),
+            mint: ctx.accounts.usdc_mint.to_account_info(),
+            to: ctx.accounts.treasury_usdc.to_account_info(),
+            authority: ctx.accounts.pool.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.key(), cpi_accounts, signer_seeds,
+        );
+        token_interface::transfer_checked(cpi_ctx, fee, 6)?;
+    }
+
+    // Update pool
     let pool = &mut ctx.accounts.pool;
     let position = &mut ctx.accounts.borrow_position;
     pool.total_borrowed = pool.total_borrowed.saturating_sub(position.borrowed_amount);
+    pool.total_fees_collected = pool.total_fees_collected.saturating_add(fee);
 
     // Zero out position
     position.collateral_amount = 0;
@@ -171,6 +191,14 @@ pub struct Liquidate<'info> {
         bump = pool.vault_bump,
     )]
     pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// Treasury USDC token account that receives protocol fees
+    #[account(
+        mut,
+        constraint = treasury_usdc.owner == pool.treasury,
+        constraint = treasury_usdc.mint == pool.usdc_mint,
+    )]
+    pub treasury_usdc: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub token_program: Interface<'info, TokenInterface>,
 }

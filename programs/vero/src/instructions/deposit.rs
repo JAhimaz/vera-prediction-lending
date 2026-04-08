@@ -4,7 +4,11 @@ use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, Tran
 use crate::state::{LendingPool, LenderPosition};
 
 pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
-    // Transfer USDC from lender to pool vault
+    let fee_bps = ctx.accounts.pool.deposit_fee_bps;
+    let fee = (amount as u128 * fee_bps as u128 / 10000) as u64;
+    let net_amount = amount.saturating_sub(fee);
+
+    // Transfer full amount from lender to pool vault
     let cpi_accounts = TransferChecked {
         from: ctx.accounts.lender_usdc.to_account_info(),
         mint: ctx.accounts.usdc_mint.to_account_info(),
@@ -14,15 +18,35 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     let cpi_ctx = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts);
     token_interface::transfer_checked(cpi_ctx, amount, 6)?;
 
-    // Update pool state
+    // Transfer fee from vault to treasury (PDA signer)
+    if fee > 0 {
+        let pool = &ctx.accounts.pool;
+        let usdc_mint_key = pool.usdc_mint;
+        let pool_seeds = &[b"pool".as_ref(), usdc_mint_key.as_ref(), &[pool.bump]];
+        let signer_seeds = &[&pool_seeds[..]];
+
+        let cpi_accounts = TransferChecked {
+            from: ctx.accounts.vault.to_account_info(),
+            mint: ctx.accounts.usdc_mint.to_account_info(),
+            to: ctx.accounts.treasury_usdc.to_account_info(),
+            authority: ctx.accounts.pool.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.key(), cpi_accounts, signer_seeds,
+        );
+        token_interface::transfer_checked(cpi_ctx, fee, 6)?;
+    }
+
+    // Update pool state (only net amount counts as deposit)
     let pool = &mut ctx.accounts.pool;
-    pool.total_deposits = pool.total_deposits.checked_add(amount).unwrap();
+    pool.total_deposits = pool.total_deposits.checked_add(net_amount).unwrap();
+    pool.total_fees_collected = pool.total_fees_collected.checked_add(fee).unwrap();
 
     // Update lender position
     let position = &mut ctx.accounts.lender_position;
     position.owner = ctx.accounts.lender.key();
     position.pool = pool.key();
-    position.deposited_amount = position.deposited_amount.checked_add(amount).unwrap();
+    position.deposited_amount = position.deposited_amount.checked_add(net_amount).unwrap();
     position.last_update_ts = Clock::get()?.unix_timestamp;
     position.bump = ctx.bumps.lender_position;
 
@@ -57,14 +81,22 @@ pub struct Deposit<'info> {
         constraint = lender_usdc.mint == pool.usdc_mint,
         constraint = lender_usdc.owner == lender.key(),
     )]
-    pub lender_usdc: InterfaceAccount<'info, TokenAccount>,
+    pub lender_usdc: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         seeds = [b"vault", pool.key().as_ref()],
         bump = pool.vault_bump,
     )]
-    pub vault: InterfaceAccount<'info, TokenAccount>,
+    pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// Treasury USDC token account that receives protocol fees
+    #[account(
+        mut,
+        constraint = treasury_usdc.owner == pool.treasury,
+        constraint = treasury_usdc.mint == pool.usdc_mint,
+    )]
+    pub treasury_usdc: Box<InterfaceAccount<'info, TokenAccount>>,
 
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,

@@ -9,17 +9,25 @@ pub fn handler(
     liquidation_bonus_bps: u16,
     max_ltv_bps: u16,
     liquidation_threshold_bps: u16,
+    deposit_fee_bps: u16,
+    borrow_fee_bps: u16,
+    liquidation_fee_bps: u16,
 ) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
     pool.authority = ctx.accounts.authority.key();
     pool.usdc_mint = ctx.accounts.usdc_mint.key();
     pool.vault = ctx.accounts.vault.key();
+    pool.treasury = ctx.accounts.treasury.key();
     pool.total_deposits = 0;
     pool.total_borrowed = 0;
+    pool.total_fees_collected = 0;
     pool.interest_rate_bps = interest_rate_bps;
     pool.liquidation_bonus_bps = liquidation_bonus_bps;
     pool.max_ltv_bps = max_ltv_bps;
     pool.liquidation_threshold_bps = liquidation_threshold_bps;
+    pool.deposit_fee_bps = deposit_fee_bps;
+    pool.borrow_fee_bps = borrow_fee_bps;
+    pool.liquidation_fee_bps = liquidation_fee_bps;
     pool.bump = ctx.bumps.pool;
     pool.vault_bump = ctx.bumps.vault;
     Ok(())
@@ -31,6 +39,9 @@ pub struct InitializePool<'info> {
     pub authority: Signer<'info>,
 
     pub usdc_mint: InterfaceAccount<'info, Mint>,
+
+    /// CHECK: Treasury wallet that receives protocol fees
+    pub treasury: UncheckedAccount<'info>,
 
     #[account(
         init,

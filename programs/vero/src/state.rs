@@ -9,10 +9,14 @@ pub struct LendingPool {
     pub usdc_mint: Pubkey,
     /// Pool's USDC token account (vault)
     pub vault: Pubkey,
+    /// Protocol treasury wallet that receives fees
+    pub treasury: Pubkey,
     /// Total USDC deposited by lenders
     pub total_deposits: u64,
     /// Total USDC currently borrowed
     pub total_borrowed: u64,
+    /// Total fees collected by the protocol
+    pub total_fees_collected: u64,
     /// Annual interest rate in basis points (e.g., 500 = 5%)
     pub interest_rate_bps: u16,
     /// Liquidation bonus in basis points (e.g., 500 = 5% discount for liquidators)
@@ -21,6 +25,12 @@ pub struct LendingPool {
     pub max_ltv_bps: u16,
     /// Liquidation threshold in basis points (e.g., 6500 = 65%)
     pub liquidation_threshold_bps: u16,
+    /// Fee on deposits in basis points (e.g., 10 = 0.1%)
+    pub deposit_fee_bps: u16,
+    /// Fee on borrows in basis points (e.g., 50 = 0.5%)
+    pub borrow_fee_bps: u16,
+    /// Fee on liquidations in basis points (e.g., 500 = 5%)
+    pub liquidation_fee_bps: u16,
     /// Bump seed for PDA
     pub bump: u8,
     /// Bump seed for vault PDA
@@ -32,12 +42,17 @@ impl LendingPool {
         + 32  // authority
         + 32  // usdc_mint
         + 32  // vault
+        + 32  // treasury
         + 8   // total_deposits
         + 8   // total_borrowed
+        + 8   // total_fees_collected
         + 2   // interest_rate_bps
         + 2   // liquidation_bonus_bps
         + 2   // max_ltv_bps
         + 2   // liquidation_threshold_bps
+        + 2   // deposit_fee_bps
+        + 2   // borrow_fee_bps
+        + 2   // liquidation_fee_bps
         + 1   // bump
         + 1;  // vault_bump
 
