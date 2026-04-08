@@ -63,7 +63,7 @@ async function main() {
     })
     .filter(Boolean)
     .filter((m: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.question === m.question) === i)
-    .slice(0, 10);
+    .slice(0, 20);
 
   console.log(`Found ${polymarkets.length} markets to create:\n`);
   polymarkets.forEach((m: any, i: number) => console.log(`  ${i + 1}. ${m.question} (${m.yesBps / 100}%)`));
