@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   ArrowUpRight, ArrowDownLeft, AlertTriangle, Search, Wallet, Landmark, ExternalLink, Clock,
 } from "lucide-react";
@@ -32,6 +32,13 @@ export default function Dashboard() {
 
   const totalDeposits = markets.reduce((s, m) => s + m.totalDeposits, 0);
   const totalBorrowed = markets.reduce((s, m) => s + m.totalBorrowed, 0);
+
+  const typewriterPhrases = useMemo(
+    () => markets.slice(0, 8).map((m) => m.name),
+    [markets],
+  );
+  const placeholder = useTypewriter(typewriterPhrases, 50, 1500);
+  const [searchFocused, setSearchFocused] = useState(false);
 
   return (
     <div className="mx-auto max-w-[1100px] px-6 py-5">
@@ -68,7 +75,9 @@ export default function Dashboard() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search markets..."
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                placeholder={searchFocused || search ? "" : placeholder}
                 className="w-full h-8 bg-card rounded-lg border border-transparent pl-8 pr-3 text-[13px] text-text-primary placeholder:text-text-disabled focus-visible:border-ring focus-visible:ring-0 outline-none transition-colors"
               />
             </div>
@@ -110,6 +119,44 @@ export default function Dashboard() {
       />
     </div>
   );
+}
+
+// === Typewriter Hook ===
+
+function useTypewriter(phrases: string[], charDelay = 50, pauseDelay = 1500) {
+  const [text, setText] = useState("");
+  const state = useRef({ idx: 0, charIdx: 0, deleting: false });
+
+  useEffect(() => {
+    if (phrases.length === 0) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const s = state.current;
+      const current = phrases[s.idx % phrases.length];
+      let delay = charDelay;
+
+      if (!s.deleting) {
+        s.charIdx++;
+        setText(current.slice(0, s.charIdx));
+        if (s.charIdx >= current.length) {
+          s.deleting = true;
+          delay = pauseDelay;
+        }
+      } else {
+        s.charIdx--;
+        setText(current.slice(0, s.charIdx));
+        if (s.charIdx <= 0) {
+          s.deleting = false;
+          s.idx = (s.idx + 1) % phrases.length;
+        }
+      }
+      timer = setTimeout(tick, delay);
+    };
+    timer = setTimeout(tick, charDelay);
+    return () => clearTimeout(timer);
+  }, [phrases, charDelay, pauseDelay]);
+
+  return text;
 }
 
 // === Helpers ===
