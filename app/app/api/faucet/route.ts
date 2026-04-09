@@ -17,7 +17,12 @@ const RPC_URL = process.env.HELIUS_API_KEY
 
 // In-memory rate limit store (resets on server restart)
 const lastClaim = new Map<string, number>();
-const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+const COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+// Whitelisted wallets bypass rate limits
+const WHITELIST = new Set([
+  "7M5GcaAkEbdzCurMBsZZAytvHABCPKW6L4URsfdTSHwT",
+]);
 
 function loadAdmin(): Keypair {
   const keyPath = process.env.KEYPAIR_PATH || `${process.env.HOME}/.config/solana/id.json`;
@@ -45,16 +50,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid market index" }, { status: 400 });
     }
 
-    // Rate limit: 24h per wallet
-    const key = `${wallet}`;
-    const last = lastClaim.get(key) || 0;
+    // Rate limit: 2h per wallet (whitelisted wallets skip)
     const now = Date.now();
-    if (now - last < COOLDOWN_MS) {
-      const remaining = Math.ceil((COOLDOWN_MS - (now - last)) / 3_600_000);
-      return NextResponse.json(
-        { error: `Rate limited. Try again in ~${remaining}h.` },
-        { status: 429 }
-      );
+    if (!WHITELIST.has(wallet)) {
+      const last = lastClaim.get(wallet) || 0;
+      if (now - last < COOLDOWN_MS) {
+        const remaining = Math.ceil((COOLDOWN_MS - (now - last)) / 60_000);
+        return NextResponse.json(
+          { error: `Rate limited. Try again in ~${remaining}m.` },
+          { status: 429 }
+        );
+      }
     }
 
     const connection = new Connection(RPC_URL, "confirmed");
@@ -85,7 +91,7 @@ export async function POST(req: Request) {
       await mintTo(connection, admin, noMint, userNo.address, admin, 100_000_000);
     }
 
-    lastClaim.set(key, now);
+    if (!WHITELIST.has(wallet)) lastClaim.set(wallet, now);
 
     return NextResponse.json({
       success: true,
