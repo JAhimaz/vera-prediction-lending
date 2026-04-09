@@ -148,17 +148,17 @@ pub struct Liquidate<'info> {
         seeds = [b"pool", pool.usdc_mint.as_ref(), pool.market_mint.as_ref()],
         bump = pool.bump,
     )]
-    pub pool: Account<'info, LendingPool>,
+    pub pool: Box<Account<'info, LendingPool>>,
 
-    pub collateral_mint: InterfaceAccount<'info, Mint>,
+    pub collateral_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         seeds = [b"oracle", collateral_mint.key().as_ref()],
         bump = oracle.bump,
     )]
-    pub oracle: Account<'info, ProbabilityOracle>,
+    pub oracle: Box<Account<'info, ProbabilityOracle>>,
 
-    pub usdc_mint: InterfaceAccount<'info, Mint>,
+    pub usdc_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         mut,
@@ -166,7 +166,7 @@ pub struct Liquidate<'info> {
         bump = borrow_position.bump,
         constraint = borrow_position.owner == borrower.key(),
     )]
-    pub borrow_position: Account<'info, BorrowPosition>,
+    pub borrow_position: Box<Account<'info, BorrowPosition>>,
 
     #[account(
         mut,

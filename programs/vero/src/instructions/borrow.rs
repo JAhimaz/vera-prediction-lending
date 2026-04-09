@@ -131,15 +131,15 @@ pub struct Borrow<'info> {
         seeds = [b"pool", pool.usdc_mint.as_ref(), pool.market_mint.as_ref()],
         bump = pool.bump,
     )]
-    pub pool: Account<'info, LendingPool>,
+    pub pool: Box<Account<'info, LendingPool>>,
 
-    pub collateral_mint: InterfaceAccount<'info, Mint>,
+    pub collateral_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         seeds = [b"oracle", collateral_mint.key().as_ref()],
         bump = oracle.bump,
     )]
-    pub oracle: Account<'info, ProbabilityOracle>,
+    pub oracle: Box<Account<'info, ProbabilityOracle>>,
 
     #[account(
         init,
@@ -148,7 +148,7 @@ pub struct Borrow<'info> {
         seeds = [b"borrow", pool.key().as_ref(), borrower.key().as_ref(), collateral_mint.key().as_ref()],
         bump,
     )]
-    pub borrow_position: Account<'info, BorrowPosition>,
+    pub borrow_position: Box<Account<'info, BorrowPosition>>,
 
     #[account(
         init,
@@ -167,7 +167,7 @@ pub struct Borrow<'info> {
     )]
     pub borrower_collateral: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    pub usdc_mint: InterfaceAccount<'info, Mint>,
+    pub usdc_mint: Box<InterfaceAccount<'info, Mint>>,
 
     #[account(
         mut,
