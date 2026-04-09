@@ -69,7 +69,7 @@ export default function Dashboard() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search markets..."
-                className="w-full h-8 bg-card rounded-lg border border-border pl-8 pr-3 text-[13px] text-text-primary placeholder:text-text-disabled focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[2px] outline-none transition-[color,box-shadow]"
+                className="w-full h-8 bg-card rounded-lg border border-transparent pl-8 pr-3 text-[13px] text-text-primary placeholder:text-text-disabled focus-visible:border-ring focus-visible:ring-0 outline-none transition-colors"
               />
             </div>
             <span className="text-[11px] text-text-disabled shrink-0">{filtered.length} markets</span>
