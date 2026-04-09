@@ -84,4 +84,10 @@ pub mod vero {
     pub fn liquidate(ctx: Context<Liquidate>) -> Result<()> {
         instructions::liquidate::handler(ctx)
     }
+
+    /// Default a borrow position after the 48-hour post-resolution grace period.
+    /// Callable by anyone. Collateral is burned and bad debt is written off.
+    pub fn default_position(ctx: Context<DefaultPosition>) -> Result<()> {
+        instructions::default_position::handler(ctx)
+    }
 }

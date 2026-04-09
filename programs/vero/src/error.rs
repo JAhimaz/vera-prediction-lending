@@ -22,4 +22,10 @@ pub enum VeroError {
     InsufficientBalance,
     #[msg("Math overflow")]
     MathOverflow,
+    #[msg("Market has not resolved yet")]
+    MarketNotResolved,
+    #[msg("48-hour grace period has not expired yet")]
+    GracePeriodActive,
+    #[msg("Position has no outstanding debt")]
+    NoOutstandingDebt,
 }

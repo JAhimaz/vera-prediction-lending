@@ -5,6 +5,7 @@ pub mod initialize_oracle;
 pub mod borrow;
 pub mod repay;
 pub mod liquidate;
+pub mod default_position;
 
 pub use initialize_pool::*;
 pub use deposit::*;
@@ -13,3 +14,4 @@ pub use initialize_oracle::*;
 pub use borrow::*;
 pub use repay::*;
 pub use liquidate::*;
+pub use default_position::*;

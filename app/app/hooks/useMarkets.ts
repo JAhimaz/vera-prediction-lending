@@ -26,6 +26,7 @@ export interface Market {
   liquidationThresholdBps: number;
   resolved: boolean;
   outcome: boolean;
+  endDate: string | null;
 }
 
 export function useMarkets() {
@@ -33,13 +34,17 @@ export function useMarkets() {
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const livePrices = useRef<Map<string, number>>(new Map());
+  const liveEndDates = useRef<Map<string, string>>(new Map());
 
   const fetchPolyPrices = useCallback(async () => {
     try {
       const res = await fetch("/api/markets");
       const data = await res.json();
       if (Array.isArray(data)) {
-        for (const m of data) livePrices.current.set(m.slug, m.yes);
+        for (const m of data) {
+          livePrices.current.set(m.slug, m.yes);
+          if (m.endDate) liveEndDates.current.set(m.slug, m.endDate);
+        }
       }
     } catch {}
   }, []);
@@ -90,6 +95,7 @@ export function useMarkets() {
             liquidationThresholdBps: (poolData as any).liquidation_threshold_bps,
             resolved: (oracleData as any).resolved,
             outcome: (oracleData as any).outcome,
+            endDate: (cfg.slug ? liveEndDates.current.get(cfg.slug) : null) ?? null,
           });
         } catch {
           // Skip markets that fail to decode (old format)

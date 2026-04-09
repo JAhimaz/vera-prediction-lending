@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import {
-  ArrowUpRight, ArrowDownLeft, AlertTriangle, Search, Wallet, Landmark, ExternalLink,
+  ArrowUpRight, ArrowDownLeft, AlertTriangle, Search, Wallet, Landmark, ExternalLink, Clock,
 } from "lucide-react";
 import { useVero } from "./hooks/useVero";
 import { useMarkets, Market } from "./hooks/useMarkets";
@@ -19,9 +19,15 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return markets;
-    const q = search.toLowerCase();
-    return markets.filter((m) => m.name.toLowerCase().includes(q));
+    const q = search.toLowerCase().trim();
+    const list = q ? markets.filter((m) => m.name.toLowerCase().includes(q)) : markets;
+    // Active markets first, then grace period, then expired
+    return [...list].sort((a, b) => {
+      const ta = timeRemaining(a.endDate);
+      const tb = timeRemaining(b.endDate);
+      if (ta.expired !== tb.expired) return ta.expired ? 1 : -1;
+      return 0;
+    });
   }, [markets, search]);
 
   const totalDeposits = markets.reduce((s, m) => s + m.totalDeposits, 0);
@@ -106,6 +112,33 @@ export default function Dashboard() {
   );
 }
 
+// === Helpers ===
+
+const GRACE_PERIOD_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+function timeRemaining(endDate: string | null): { label: string; expired: boolean; inGracePeriod: boolean } {
+  if (!endDate) return { label: "", expired: false, inGracePeriod: false };
+  const now = Date.now();
+  const end = new Date(endDate).getTime();
+  const diff = end - now;
+
+  if (diff <= 0) {
+    const graceDiff = end + GRACE_PERIOD_MS - now;
+    if (graceDiff <= 0) return { label: "Closed", expired: true, inGracePeriod: false };
+    const h = Math.floor(graceDiff / 3_600_000);
+    const min = Math.floor((graceDiff % 3_600_000) / 60_000);
+    return { label: `${h}h ${min}m to repay`, expired: true, inGracePeriod: true };
+  }
+
+  const days = Math.floor(diff / 86_400_000);
+  const h = Math.floor((diff % 86_400_000) / 3_600_000);
+  const min = Math.floor((diff % 3_600_000) / 60_000);
+
+  if (days > 0) return { label: `${days}d ${h}h left`, expired: false, inGracePeriod: false };
+  if (h > 0) return { label: `${h}h ${min}m left`, expired: false, inGracePeriod: false };
+  return { label: `${min}m left`, expired: false, inGracePeriod: false };
+}
+
 // === Market Card (Square) ===
 
 function MarketCard({ market: m, onLend, onBorrow }: {
@@ -113,22 +146,39 @@ function MarketCard({ market: m, onLend, onBorrow }: {
 }) {
   const yes = m.probabilityBps / 100;
   const no = 100 - yes;
+  const tr = timeRemaining(m.endDate);
 
   return (
-    <div className="bg-card rounded-none border border-border p-4 flex flex-col justify-between aspect-square">
+    <div className={cn(
+      "bg-card rounded-none border border-border p-4 flex flex-col justify-between aspect-square",
+      tr.expired && !tr.inGracePeriod && "opacity-50",
+    )}>
       <div>
         {m.resolved && (
           <span className="text-[10px] text-warning font-medium block mb-1">RESOLVED</span>
+        )}
+        {tr.inGracePeriod && (
+          <span className="text-[10px] text-warning font-medium block mb-1">GRACE PERIOD</span>
         )}
         <a
           href={m.polymarketUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[13px] font-semibold text-text-primary leading-snug line-clamp-2 mb-3 block hover:text-brand transition-colors"
+          className="text-[13px] font-semibold text-text-primary leading-snug line-clamp-2 mb-2 block hover:text-brand transition-colors"
         >
           {m.name}
           <ExternalLink className="size-2.5 inline ms-1 -mt-0.5 opacity-40" />
         </a>
+
+        {tr.label && (
+          <div className={cn(
+            "flex items-center gap-1 text-[10px] font-medium mb-2",
+            tr.expired ? "text-destructive" : "text-text-tertiary",
+          )}>
+            <Clock className="size-2.5" />
+            {tr.label}
+          </div>
+        )}
 
         {/* Yes / No bar */}
         <div className="flex gap-0.5 h-1.5 mb-1.5">
@@ -147,10 +197,10 @@ function MarketCard({ market: m, onLend, onBorrow }: {
           <span className="text-[10px] text-text-disabled">available</span>
         </div>
         <div className="flex gap-1.5">
-          <button onClick={onLend} className="flex-1 h-7 rounded-sm bg-secondary text-[11px] font-semibold text-text-primary flex items-center justify-center gap-1 transition-colors active:bg-surface-muted">
+          <button onClick={onLend} disabled={tr.expired && !tr.inGracePeriod} className="flex-1 h-7 rounded-sm bg-secondary text-[11px] font-semibold text-text-primary flex items-center justify-center gap-1 transition-colors active:bg-surface-muted disabled:opacity-40 disabled:pointer-events-none">
             <ArrowDownLeft className="size-3" /> Lend
           </button>
-          <button onClick={onBorrow} className="flex-1 h-7 rounded-sm bg-brand text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition-colors active:bg-brand/85">
+          <button onClick={onBorrow} disabled={tr.expired && !tr.inGracePeriod} className="flex-1 h-7 rounded-sm bg-brand text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition-colors active:bg-brand/85 disabled:opacity-40 disabled:pointer-events-none">
             <ArrowUpRight className="size-3" /> Borrow
           </button>
         </div>

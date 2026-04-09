@@ -41,7 +41,7 @@ async function main() {
   // Fetch real Polymarket markets
   console.log("\nFetching live Polymarket markets...");
   const res = await fetch(
-    "https://gamma-api.polymarket.com/markets?limit=50&active=true&order=volume24hr&ascending=false"
+    "https://gamma-api.polymarket.com/markets?limit=120&active=true&order=volume24hr&ascending=false"
   );
   const allMarkets = await res.json();
 
@@ -63,7 +63,7 @@ async function main() {
     })
     .filter(Boolean)
     .filter((m: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.question === m.question) === i)
-    .slice(0, 20);
+    .slice(0, 50);
 
   console.log(`Found ${polymarkets.length} markets to create:\n`);
   polymarkets.forEach((m: any, i: number) => console.log(`  ${i + 1}. ${m.question} (${m.yesBps / 100}%)`));

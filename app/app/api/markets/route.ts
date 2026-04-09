@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export async function GET() {
   try {
     const res = await fetch(
-      "https://gamma-api.polymarket.com/markets?limit=30&active=true&order=volume24hr&ascending=false",
+      "https://gamma-api.polymarket.com/markets?limit=120&active=true&order=volume24hr&ascending=false",
       { next: { revalidate: 60 } }
     );
     const data = await res.json();
@@ -27,7 +27,7 @@ export async function GET() {
         };
       })
       .filter(Boolean)
-      .slice(0, 12);
+      .slice(0, 50);
 
     return NextResponse.json(markets);
   } catch (e: any) {

@@ -203,6 +203,155 @@
       ]
     },
     {
+      "name": "default_position",
+      "docs": [
+        "Default a borrow position after the 48-hour post-resolution grace period.",
+        "Callable by anyone. Collateral is burned and bad debt is written off."
+      ],
+      "discriminator": [
+        28,
+        42,
+        141,
+        206,
+        155,
+        186,
+        143,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "Anyone can call default after the grace period expires."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "borrower",
+          "docs": [
+            "The borrower who failed to repay."
+          ]
+        },
+        {
+          "name": "pool",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.usdc_mint",
+                "account": "LendingPool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collateral_mint",
+          "writable": true
+        },
+        {
+          "name": "oracle",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  114,
+                  97,
+                  99,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "collateral_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "borrow_position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  114,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "borrower"
+              },
+              {
+                "kind": "account",
+                "path": "collateral_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collateral_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  108,
+                  108,
+                  97,
+                  116,
+                  101,
+                  114,
+                  97,
+                  108,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "borrow_position"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "deposit",
       "docs": [
         "Deposit USDC into the lending pool as a lender."
@@ -1152,6 +1301,21 @@
       "code": 6009,
       "name": "MathOverflow",
       "msg": "Math overflow"
+    },
+    {
+      "code": 6010,
+      "name": "MarketNotResolved",
+      "msg": "Market has not resolved yet"
+    },
+    {
+      "code": 6011,
+      "name": "GracePeriodActive",
+      "msg": "48-hour grace period has not expired yet"
+    },
+    {
+      "code": 6012,
+      "name": "NoOutstandingDebt",
+      "msg": "Position has no outstanding debt"
     }
   ],
   "types": [
