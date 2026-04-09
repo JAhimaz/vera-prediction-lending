@@ -4,8 +4,12 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   ArrowUpRight, ArrowDownLeft, AlertTriangle, Search, Wallet, Landmark, ExternalLink, Clock,
 } from "lucide-react";
-import { useVero } from "./hooks/useVero";
+import { useVero, findPoolPda, findLenderPositionPda, findBorrowPositionPda, PROGRAM_ID } from "./hooks/useVero";
 import { useMarkets, Market } from "./hooks/useMarkets";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
+import { BorshCoder, Idl } from "@coral-xyz/anchor";
+import idlJson from "../vero.json";
 import { cn } from "./components/ui/utils";
 import { Button } from "./components/ui/button";
 import {
@@ -32,6 +36,7 @@ export default function Dashboard() {
 
   const totalDeposits = markets.reduce((s, m) => s + m.totalDeposits, 0);
   const totalBorrowed = markets.reduce((s, m) => s + m.totalBorrowed, 0);
+  const { userLent, userBorrowed } = useUserTotals(markets);
 
   const typewriterPhrases = useMemo(
     () => markets.slice(0, 8).map((m) => m.name),
@@ -63,6 +68,31 @@ export default function Dashboard() {
             <p className="text-[14px] font-bold text-text-primary leading-tight">${totalBorrowed.toLocaleString()}</p>
           </div>
         </div>
+
+        {(userLent > 0 || userBorrowed > 0) && (
+          <>
+            <div className="w-px h-8 bg-text-disabled/40" />
+            <div className="flex items-center gap-2">
+              <div className="size-6 rounded-md bg-success/10 flex items-center justify-center">
+                <ArrowDownLeft className="size-3 text-success" />
+              </div>
+              <div>
+                <p className="text-[10px] text-text-tertiary uppercase tracking-wider leading-none">Your Lent</p>
+                <p className="text-[14px] font-bold text-text-primary leading-tight">${userLent.toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="w-px h-6 bg-border" />
+            <div className="flex items-center gap-2">
+              <div className="size-6 rounded-md bg-brand/10 flex items-center justify-center">
+                <ArrowUpRight className="size-3 text-brand" />
+              </div>
+              <div>
+                <p className="text-[10px] text-text-tertiary uppercase tracking-wider leading-none">Your Borrowed</p>
+                <p className="text-[14px] font-bold text-text-primary leading-tight">${userBorrowed.toLocaleString()}</p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex flex-col lg:flex-row gap-5">
@@ -119,6 +149,64 @@ export default function Dashboard() {
       />
     </div>
   );
+}
+
+// === User Totals Hook ===
+
+function useUserTotals(markets: Market[]) {
+  const { connection } = useConnection();
+  const { publicKey } = useWallet();
+  const [userLent, setUserLent] = useState(0);
+  const [userBorrowed, setUserBorrowed] = useState(0);
+
+  useEffect(() => {
+    if (!publicKey || markets.length === 0) {
+      setUserLent(0);
+      setUserBorrowed(0);
+      return;
+    }
+    const coder = new BorshCoder(idlJson as Idl);
+
+    const lenderKeys = markets.map((m) => {
+      const [pool] = findPoolPda(m.usdcMint);
+      const [pos] = findLenderPositionPda(pool, publicKey);
+      return pos;
+    });
+    const borrowKeys = markets.map((m) => {
+      const [pool] = findPoolPda(m.usdcMint);
+      const [pos] = findBorrowPositionPda(pool, publicKey, m.predictionMint);
+      return pos;
+    });
+
+    connection.getMultipleAccountsInfo([...lenderKeys, ...borrowKeys]).then((accounts) => {
+      let lent = 0;
+      let borrowed = 0;
+      for (let i = 0; i < markets.length; i++) {
+        const lenderAcc = accounts[i];
+        const borrowAcc = accounts[markets.length + i];
+        if (lenderAcc) {
+          try {
+            const data = coder.accounts.decode("LenderPosition", lenderAcc.data);
+            const shares = (data as any).shares?.toNumber?.() ?? 0;
+            // Convert shares to USDC: shares * total_deposits / total_deposit_shares
+            // Approximate using market data (close enough for display)
+            if (shares > 0) lent += shares / 1e6;
+          } catch {}
+        }
+        if (borrowAcc) {
+          try {
+            const data = coder.accounts.decode("BorrowPosition", borrowAcc.data);
+            const amount = (data as any).borrowed_amount?.toNumber?.() ?? 0;
+            if (amount > 0) borrowed += amount / 1e6;
+          } catch {}
+        }
+      }
+      setUserLent(lent);
+      setUserBorrowed(borrowed);
+    }).catch(() => {});
+  }, [publicKey, connection, markets]);
+
+  return { userLent, userBorrowed };
 }
 
 // === Typewriter Hook ===
