@@ -69,7 +69,7 @@ export default function Dashboard() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search markets..."
-                className="w-full h-8 bg-card rounded-sm border border-border pl-8 pr-3 text-[13px] text-text-primary placeholder:text-text-disabled focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[2px] outline-none transition-[color,box-shadow]"
+                className="w-full h-8 bg-card rounded-lg border border-border pl-8 pr-3 text-[13px] text-text-primary placeholder:text-text-disabled focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[2px] outline-none transition-[color,box-shadow]"
               />
             </div>
             <span className="text-[11px] text-text-disabled shrink-0">{filtered.length} markets</span>
@@ -150,7 +150,7 @@ function MarketCard({ market: m, onLend, onBorrow }: {
 
   return (
     <div className={cn(
-      "bg-card rounded-none border border-border p-4 flex flex-col justify-between aspect-square",
+      "bg-card rounded-xl border border-border p-4 flex flex-col justify-between aspect-square",
       tr.expired && !tr.inGracePeriod && "opacity-50",
     )}>
       <div>
@@ -202,10 +202,10 @@ function MarketCard({ market: m, onLend, onBorrow }: {
           )}
         </div>
         <div className="flex gap-1.5">
-          <button onClick={onLend} disabled={tr.expired && !tr.inGracePeriod} className="flex-1 h-7 rounded-sm bg-secondary text-[11px] font-semibold text-text-primary flex items-center justify-center gap-1 transition-colors active:bg-surface-muted disabled:opacity-40 disabled:pointer-events-none">
+          <button onClick={onLend} disabled={tr.expired && !tr.inGracePeriod} className="flex-1 h-7 rounded-lg bg-secondary text-[11px] font-semibold text-text-primary flex items-center justify-center gap-1 transition-colors active:bg-surface-muted disabled:opacity-40 disabled:pointer-events-none">
             <ArrowDownLeft className="size-3" /> Lend
           </button>
-          <button onClick={onBorrow} disabled={tr.expired && !tr.inGracePeriod} className="flex-1 h-7 rounded-sm bg-brand text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition-colors active:bg-brand/85 disabled:opacity-40 disabled:pointer-events-none">
+          <button onClick={onBorrow} disabled={tr.expired && !tr.inGracePeriod} className="flex-1 h-7 rounded-lg bg-brand text-[11px] font-semibold text-white flex items-center justify-center gap-1 transition-colors active:bg-brand/85 disabled:opacity-40 disabled:pointer-events-none">
             <ArrowUpRight className="size-3" /> Borrow
           </button>
         </div>
@@ -221,7 +221,7 @@ function PositionsSidebar({ markets }: { markets: Market[] }) {
 
   if (!connected) {
     return (
-      <div className="bg-card border border-border rounded-none p-6 text-center">
+      <div className="bg-card border border-border rounded-xl p-6 text-center">
         <p className="text-[13px] text-text-secondary">Connect wallet to view positions</p>
       </div>
     );
@@ -267,7 +267,7 @@ function PositionCard({ market: m }: { market: Market }) {
   const dashOffset = circumference * (1 - healthPct);
 
   return (
-    <div className="bg-card border border-border rounded-none p-3 flex items-center gap-3">
+    <div className="bg-card border border-border rounded-xl p-3 flex items-center gap-3">
       {/* Health Circle */}
       <div className="size-11 shrink-0 relative">
         <svg viewBox="0 0 44 44" className="size-11 -rotate-90">
@@ -372,7 +372,7 @@ function ActionModal({ market, mode, onClose, onSuccess }: {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="bg-card border-border rounded-none sm:max-w-sm p-5">
+      <DialogContent className="bg-card border-border rounded-xl sm:max-w-sm p-5">
         <DialogHeader>
           <DialogTitle className="text-[14px] text-text-primary">{market?.name}</DialogTitle>
           <DialogDescription className="text-[11px]">
@@ -380,7 +380,7 @@ function ActionModal({ market, mode, onClose, onSuccess }: {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="bg-muted rounded-sm p-[2px] flex">
+        <div className="bg-muted rounded-lg p-[2px] flex">
           {mode === "lend" ? (
             <>
               <TabBtn active={tab === "deposit"} onClick={() => { setTab("deposit"); setAmount(""); }}>Deposit</TabBtn>
@@ -442,7 +442,7 @@ function ActionModal({ market, mode, onClose, onSuccess }: {
           </p>
         )}
 
-        <Button size="sm" className="w-full rounded-sm h-9" disabled={!connected || !amount || loading} onClick={handleAction}>
+        <Button size="sm" className="w-full rounded-lg h-9" disabled={!connected || !amount || loading} onClick={handleAction}>
           {loading ? "..." : !connected ? "Connect Wallet" :
             tab === "deposit" ? "Deposit" : tab === "withdraw" ? "Withdraw" : tab === "borrow" ? "Borrow" : "Repay"
           }
@@ -461,7 +461,7 @@ function ActionModal({ market, mode, onClose, onSuccess }: {
 function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button onClick={onClick} className={cn(
-      "flex-1 h-7 rounded-sm text-[12px] font-semibold transition-all",
+      "flex-1 h-7 rounded-lg text-[12px] font-semibold transition-all",
       active ? "bg-card text-text-primary shadow-sm" : "text-muted-foreground"
     )}>
       {children}
@@ -477,7 +477,7 @@ function ModalInput({ label, value, onChange, onMax }: {
       <label className="text-[11px] text-text-disabled block mb-1">{label}</label>
       <div className="relative">
         <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder="0.00"
-          className="w-full h-9 bg-input-background rounded-sm border border-input px-3 text-[13px] text-text-primary placeholder:text-text-disabled focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[2px] outline-none transition-[color,box-shadow]" />
+          className="w-full h-9 bg-input-background rounded-lg border border-input px-3 text-[13px] text-text-primary placeholder:text-text-disabled focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[2px] outline-none transition-[color,box-shadow]" />
         {onMax && <button onClick={onMax} className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-brand">MAX</button>}
       </div>
     </div>
