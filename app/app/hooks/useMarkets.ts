@@ -11,8 +11,8 @@ const PROGRAM_ID = new PublicKey(idlJson.address);
 
 export interface Market {
   name: string;
-  slug: string;
-  polymarketUrl: string;
+  symbol: string;
+  metadaoQuestion: string;
   poolAddress: PublicKey;
   usdcMint: PublicKey;
   predictionMint: PublicKey;
@@ -26,7 +26,6 @@ export interface Market {
   liquidationThresholdBps: number;
   resolved: boolean;
   outcome: boolean;
-  endDate: string | null;
   supplyAprPct: number;
 }
 
@@ -34,32 +33,15 @@ export function useMarkets() {
   const { connection } = useConnection();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
-  const livePrices = useRef<Map<string, number>>(new Map());
-  const liveEndDates = useRef<Map<string, string>>(new Map());
-
-  const fetchPolyPrices = useCallback(async () => {
-    try {
-      const res = await fetch("/api/markets");
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        for (const m of data) {
-          livePrices.current.set(m.slug, m.yes);
-          if (m.endDate) liveEndDates.current.set(m.slug, m.endDate);
-        }
-      }
-    } catch {}
-  }, []);
 
   const discoverMarkets = useCallback(async () => {
     try {
       const coder = new BorshCoder(idlJson as Idl);
 
-      // Batch: collect all pool + oracle pubkeys
       const poolKeys = marketsConfig.map((c) => new PublicKey(c.pool));
       const oracleKeys = marketsConfig.map((c) => new PublicKey(c.oracle));
       const allKeys = [...poolKeys, ...oracleKeys];
 
-      // Single RPC call for all accounts
       const allAccounts = await connection.getMultipleAccountsInfo(allKeys);
 
       const discovered: Market[] = [];
@@ -75,18 +57,15 @@ export function useMarkets() {
           const poolData = coder.accounts.decode("LendingPool", poolAccount.data);
           const oracleData = coder.accounts.decode("ProbabilityOracle", oracleAccount.data);
 
-          const livePrice = cfg.slug ? livePrices.current.get(cfg.slug) : undefined;
-          const probBps = livePrice ?? (oracleData as any).probability_bps;
-
           discovered.push({
             name: cfg.name,
-            slug: cfg.slug,
-            polymarketUrl: cfg.polymarketUrl,
+            symbol: (cfg as any).symbol || "TOKEN",
+            metadaoQuestion: (cfg as any).metadaoQuestion || "",
             poolAddress: poolKeys[i],
             usdcMint: new PublicKey(cfg.usdcMint),
             predictionMint: new PublicKey(cfg.predictionMint),
             oracleAddress: oracleKeys[i],
-            probabilityBps: probBps,
+            probabilityBps: (oracleData as any).probability_bps,
             totalDeposits: (poolData as any).total_deposits.toNumber() / 1e6,
             totalBorrowed: (poolData as any).total_borrowed.toNumber() / 1e6,
             availableLiquidity:
@@ -96,7 +75,6 @@ export function useMarkets() {
             liquidationThresholdBps: (poolData as any).liquidation_threshold_bps,
             resolved: (oracleData as any).resolved,
             outcome: (oracleData as any).outcome,
-            endDate: (cfg.slug ? liveEndDates.current.get(cfg.slug) : null) ?? null,
             supplyAprPct: (() => {
               const deposits = (poolData as any).total_deposits.toNumber();
               const borrowed = (poolData as any).total_borrowed.toNumber();
@@ -107,7 +85,7 @@ export function useMarkets() {
             })(),
           });
         } catch {
-          // Skip markets that fail to decode (old format)
+          // Skip markets that fail to decode
         }
       }
 
@@ -120,9 +98,8 @@ export function useMarkets() {
   }, [connection]);
 
   const refresh = useCallback(async () => {
-    await fetchPolyPrices();
     await discoverMarkets();
-  }, [fetchPolyPrices, discoverMarkets]);
+  }, [discoverMarkets]);
 
   useEffect(() => {
     refresh();
