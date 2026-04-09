@@ -66,11 +66,11 @@ export function useMarkets() {
         if (!poolAccount || !oracleAccount) continue;
 
         try {
-          const poolData = coder.accounts.decode("lendingPool", poolAccount.data);
-          const oracleData = coder.accounts.decode("probabilityOracle", oracleAccount.data);
+          const poolData = coder.accounts.decode("LendingPool", poolAccount.data);
+          const oracleData = coder.accounts.decode("ProbabilityOracle", oracleAccount.data);
 
           const livePrice = cfg.slug ? livePrices.current.get(cfg.slug) : undefined;
-          const probBps = livePrice ?? (oracleData as any).probabilityBps;
+          const probBps = livePrice ?? (oracleData as any).probability_bps;
 
           discovered.push({
             name: cfg.name,
@@ -81,13 +81,13 @@ export function useMarkets() {
             predictionMint: new PublicKey(cfg.predictionMint),
             oracleAddress: oracleKeys[i],
             probabilityBps: probBps,
-            totalDeposits: (poolData as any).totalDeposits.toNumber() / 1e6,
-            totalBorrowed: (poolData as any).totalBorrowed.toNumber() / 1e6,
+            totalDeposits: (poolData as any).total_deposits.toNumber() / 1e6,
+            totalBorrowed: (poolData as any).total_borrowed.toNumber() / 1e6,
             availableLiquidity:
-              ((poolData as any).totalDeposits.toNumber() - (poolData as any).totalBorrowed.toNumber()) / 1e6,
-            interestRateBps: (poolData as any).interestRateBps,
-            maxLtvBps: (poolData as any).maxLtvBps,
-            liquidationThresholdBps: (poolData as any).liquidationThresholdBps,
+              ((poolData as any).total_deposits.toNumber() - (poolData as any).total_borrowed.toNumber()) / 1e6,
+            interestRateBps: (poolData as any).interest_rate_bps,
+            maxLtvBps: (poolData as any).max_ltv_bps,
+            liquidationThresholdBps: (poolData as any).liquidation_threshold_bps,
             resolved: (oracleData as any).resolved,
             outcome: (oracleData as any).outcome,
           });
