@@ -77,7 +77,7 @@ export default function Dashboard() {
                 onChange={(e) => setSearch(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setSearchFocused(false)}
-                placeholder={searchFocused || search ? "" : placeholder}
+                placeholder={search ? "Search for market..." : searchFocused ? "Search for market..." : placeholder}
                 className="w-full h-8 bg-card rounded-lg border border-transparent pl-8 pr-3 text-[13px] text-text-primary placeholder:text-text-disabled focus-visible:border-ring focus-visible:ring-0 outline-none transition-colors"
               />
             </div>
@@ -148,6 +148,7 @@ function useTypewriter(phrases: string[], charDelay = 50, pauseDelay = 1500) {
         if (s.charIdx <= 0) {
           s.deleting = false;
           s.idx = (s.idx + 1) % phrases.length;
+          delay = 600; // pause between markets
         }
       }
       timer = setTimeout(tick, delay);
