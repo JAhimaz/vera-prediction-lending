@@ -119,7 +119,7 @@ export function useVero(usdcMint?: PublicKey, predictionMint?: PublicKey, market
     const sig = await builder.rpc();
     await refreshBalances();
     return sig;
-  }, [program, wallet.publicKey, connection, usdcMint, refreshBalances]);
+  }, [program, wallet.publicKey, connection, usdcMint, marketMint, refreshBalances]);
 
   const withdraw = useCallback(async (amount: number) => {
     if (!program || !wallet.publicKey || !usdcMint) throw new Error("Not ready");
@@ -135,7 +135,7 @@ export function useVero(usdcMint?: PublicKey, predictionMint?: PublicKey, market
     const sig = await builder.rpc();
     await refreshBalances();
     return sig;
-  }, [program, wallet.publicKey, connection, usdcMint, refreshBalances]);
+  }, [program, wallet.publicKey, connection, usdcMint, marketMint, refreshBalances]);
 
   const borrow = useCallback(async (collateralAmount: number, borrowAmount: number) => {
     if (!program || !wallet.publicKey || !usdcMint || !predictionMint) throw new Error("Not ready");
@@ -157,7 +157,7 @@ export function useVero(usdcMint?: PublicKey, predictionMint?: PublicKey, market
     const sig = await builder.rpc();
     await refreshBalances();
     return sig;
-  }, [program, wallet.publicKey, connection, usdcMint, predictionMint, refreshBalances]);
+  }, [program, wallet.publicKey, connection, usdcMint, marketMint, predictionMint, refreshBalances]);
 
   const repay = useCallback(async (amount: number) => {
     if (!program || !wallet.publicKey || !usdcMint || !predictionMint) throw new Error("Not ready");
@@ -173,7 +173,7 @@ export function useVero(usdcMint?: PublicKey, predictionMint?: PublicKey, market
     }).rpc();
     await refreshBalances();
     return sig;
-  }, [program, wallet.publicKey, connection, usdcMint, predictionMint, refreshBalances]);
+  }, [program, wallet.publicKey, connection, usdcMint, marketMint, predictionMint, refreshBalances]);
 
   const fetchPool = useCallback(async () => {
     if (!program || !usdcMint) return null;
@@ -192,14 +192,14 @@ export function useVero(usdcMint?: PublicKey, predictionMint?: PublicKey, market
     const [pool] = findPoolPda(usdcMint, marketMint);
     const [pos] = findBorrowPositionPda(pool, wallet.publicKey, predictionMint);
     try { return await (program.account as any).borrowPosition.fetch(pos); } catch { return null; }
-  }, [program, wallet.publicKey, usdcMint, predictionMint]);
+  }, [program, wallet.publicKey, usdcMint, marketMint, predictionMint]);
 
   const fetchLenderPosition = useCallback(async () => {
     if (!program || !wallet.publicKey || !usdcMint) return null;
     const [pool] = findPoolPda(usdcMint, marketMint);
     const [pos] = findLenderPositionPda(pool, wallet.publicKey);
     try { return await (program.account as any).lenderPosition.fetch(pos); } catch { return null; }
-  }, [program, wallet.publicKey, usdcMint]);
+  }, [program, wallet.publicKey, usdcMint, marketMint]);
 
   return {
     program, provider, deposit, withdraw, borrow, repay,
